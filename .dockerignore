@@ -8,8 +8,7 @@ __pycache__
 # stat reports (1678979915.txt), not requirements.txt
 
 *.zip
-credentials/*.json
-calm-vine-*.json
+
 README.md
 .vscode
 .idea
