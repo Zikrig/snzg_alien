@@ -6,8 +6,6 @@
 credentials/*.json
 calm-vine-*.json
 
-# Generated stat reports
-*.txt
 
 # Python
 __pycache__/
