@@ -118,9 +118,11 @@ def start(message):
             return
 
         logger.info(
-            "promo_verify: user=%s pending=%s text=%r",
+            "promo_verify: user=%s promo=%s shop=%r label=%r text=%r",
             message.chat.id,
-            pending[0],
+            promo_key,
+            data_file.get_unicum_meta(promo_key).get("shop"),
+            data_file.get_unicum_meta(promo_key).get("label"),
             message.text[:80] if message.text else None,
         )
 
@@ -192,12 +194,37 @@ def query_handler(call):
             bot.send_message(call.message.chat.id, "Куда отправимся за скидками дальше?" ,
                              reply_markup=keyb_local)
         else:
+            meta = data_file.get_unicum_meta(data)
+            codes_left = len(data_file.unicum_sheet.get(data, []))
             if data_file.user_has_got_promo(call.message.chat.id, data):
+                logger.info(
+                    "promo_request: user=%s promo=%s shop=%r label=%r — already_used",
+                    call.message.chat.id,
+                    data,
+                    meta.get("shop"),
+                    meta.get("label"),
+                )
                 bot.send_message(call.message.chat.id, "Вы уже использовали промокод")
             elif not data_file.unicum_sheet.get(data):
+                logger.warning(
+                    "promo_request: user=%s promo=%s shop=%r label=%r — no_codes_left",
+                    call.message.chat.id,
+                    data,
+                    meta.get("shop"),
+                    meta.get("label"),
+                )
                 bot.send_message(call.message.chat.id, "Промокоды закончились")
             else:
-                logger.info("promo_start: user=%s promo=%s — sending instructions", call.message.chat.id, data)
+                logger.info(
+                    "promo_request: user=%s promo=%s shop=%r label=%r category=%r "
+                    "codes_available=%d — sending instructions",
+                    call.message.chat.id,
+                    data,
+                    meta.get("shop"),
+                    meta.get("label"),
+                    meta.get("category"),
+                    codes_left,
+                )
                 bot.send_message(
                     call.message.chat.id,
                     data_file.text_dict[data] + "\n" + data_file.link_try_dict[data][1],

@@ -32,6 +32,34 @@ COLUMN_LETTERS = [
 got_promos = {}
 promo_lock = threading.Lock()
 
+# {promo_key: {"category", "shop", "label"}}
+unicum_meta = {}
+
+
+def get_unicum_meta(promo_key):
+    return unicum_meta.get(promo_key, {})
+
+
+def log_unicum_inventory():
+    """Log one-time promo articles and available code counts after sheet reload."""
+    if not unicum_meta:
+        logger.info("unicum_inventory: no one-time promos loaded")
+        return
+
+    lines = []
+    for promo_key in sorted(unicum_meta, key=lambda k: int(k.replace("u", ""))):
+        meta = unicum_meta[promo_key]
+        codes_left = len(unicum_sheet.get(promo_key, []))
+        lines.append(
+            f"  {promo_key}: shop={meta['shop']!r} label={meta['label']!r} "
+            f"category={meta['category']!r} codes_available={codes_left}"
+        )
+    logger.info(
+        "unicum_inventory: %d article(s) with one-time promos:\n%s",
+        len(lines),
+        "\n".join(lines),
+    )
+
 
 def cell_done(cell, user_id):
     """Mark a promo cell as taken. One API call — format removed to stay within Sheets quota."""
@@ -67,26 +95,44 @@ def issue_unicum_promo(user_id, promo_key):
     """Reserve a one-time promo code and mark it in the sheet."""
     col_ind = int(promo_key.replace("u", ""))
     user_id_str = str(user_id)
+    meta = get_unicum_meta(promo_key)
 
     with promo_lock:
         if col_ind in got_promos.get(user_id_str, set()):
-            logger.info("issue_unicum_promo: user=%s promo=%s — already_used", user_id, promo_key)
+            logger.info(
+                "issue_unicum_promo: user=%s promo=%s shop=%r label=%r — already_used",
+                user_id,
+                promo_key,
+                meta.get("shop"),
+                meta.get("label"),
+            )
             raise ValueError("already_used")
 
         queue = unicum_sheet.get(promo_key, [])
         if not queue:
-            logger.warning("issue_unicum_promo: user=%s promo=%s — no_codes_left", user_id, promo_key)
+            logger.warning(
+                "issue_unicum_promo: user=%s promo=%s shop=%r label=%r — no_codes_left",
+                user_id,
+                promo_key,
+                meta.get("shop"),
+                meta.get("label"),
+            )
             raise ValueError("no_codes_left")
 
         promo_ind, promo_code = queue[0]
         unicum_sheet[promo_key] = queue[1:]
         cell = COLUMN_LETTERS[col_ind] + str(promo_ind + 7)
         logger.info(
-            "issue_unicum_promo: user=%s promo=%s cell=%s code=%s — writing to sheet",
+            "issue_unicum_promo: user=%s promo=%s shop=%r label=%r category=%r "
+            "cell=%s code=%s codes_left_after=%d — writing to sheet",
             user_id,
             promo_key,
+            meta.get("shop"),
+            meta.get("label"),
+            meta.get("category"),
             cell,
             promo_code,
+            len(unicum_sheet[promo_key]),
         )
 
         try:
@@ -102,12 +148,18 @@ def issue_unicum_promo(user_id, promo_key):
             raise
 
         got_promos.setdefault(user_id_str, set()).add(col_ind)
-        logger.info("issue_unicum_promo: user=%s promo=%s — done", user_id, promo_key)
+        logger.info(
+            "issue_unicum_promo: user=%s promo=%s shop=%r label=%r — done",
+            user_id,
+            promo_key,
+            meta.get("shop"),
+            meta.get("label"),
+        )
         return promo_code
 
 
 def regenerate():
-    global main_dict, text_dict, semi_dict, main_list, unicum_sheet, got_promos, link_try_dict
+    global main_dict, text_dict, semi_dict, main_list, unicum_sheet, got_promos, link_try_dict, unicum_meta
     main_list = worksheet.get_all_values()
     main_list2 = worksheet2.get_all_values()
     main_dict = {}
@@ -116,6 +168,7 @@ def regenerate():
     unicum_sheet = {}
     link_try_dict = {}
     got_promos = {}
+    unicum_meta = {}
     header = main_list[0]
 
     for ind, el in enumerate(main_list[1:], start=1):
@@ -162,6 +215,11 @@ def regenerate():
         promo_key = str(ind) + "u"
         text_dict[promo_key] = el[3]
         unicum_sheet[promo_key] = []
+        unicum_meta[promo_key] = {
+            "category": el[0],
+            "shop": el[1],
+            "label": el[2],
+        }
         link_try_dict[promo_key] = [promo_key, el[4], el[5]]
         for indx, promo in enumerate(el[6:]):
             if promo[:2] == "@*":
@@ -170,6 +228,8 @@ def regenerate():
                 pass
             else:
                 unicum_sheet[promo_key].append((indx, promo))
+
+    log_unicum_inventory()
 
 
 regenerate()
