@@ -31,21 +31,12 @@ promo_lock = threading.Lock()
 
 
 def cell_done(cell, user_id):
+    """Mark a promo cell as taken. One API call — format removed to stay within Sheets quota."""
     value = f"@*{user_id}"
     last_error = None
     for attempt in range(3):
         try:
             worksheet2.update([[value]], range_name=cell)
-            worksheet2.format(
-                f"{cell}:{cell}",
-                {
-                    "backgroundColor": {
-                        "red": 1.0,
-                        "green": 0.0,
-                        "blue": 0.0,
-                    }
-                },
-            )
             return
         except Exception as exc:
             last_error = exc
@@ -59,9 +50,12 @@ def cell_done(cell, user_id):
     raise last_error
 
 
+_EMPTY_PROMOS = frozenset()
+
+
 def user_has_got_promo(user_id, promo_key):
     col_ind = int(promo_key.replace("u", ""))
-    return col_ind in got_promos.get(str(user_id), set())
+    return col_ind in got_promos.get(str(user_id), _EMPTY_PROMOS)
 
 
 def issue_unicum_promo(user_id, promo_key):

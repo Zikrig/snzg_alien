@@ -56,10 +56,8 @@ def back_keyboard_gen(market):
 
 all_markets_keyb = InlineKeyboardMarkup()
 tem = list(sorted(data_file.semi_dict.keys()))
-print(tem)
-for i in range(0,len(tem),3):
-    tempr = tem[i:i + 3]
-    print(tempr)
+for i in range(0, len(tem), 3):
+    tempr = tem[i : i + 3]
     l = []
     for j in tempr:
         l.append(InlineKeyboardButton(j,callback_data = "2"+j))
@@ -71,14 +69,8 @@ to_menu_keyb.row(InlineKeyboardButton("В меню",callback_data = "bm"))
 
 @bot.message_handler(content_types=['text'])
 def start(message):
-    
     global user_import_dict
 
-
-    print(user_import_dict)
-
-
-    
     if message.text == '/start':
         bot.send_message(message.chat.id,"Рады вас видеть в SkidkiNezagorami", reply_markup=main_keyb_cat_market)
         bot.send_message(message.chat.id, "Выберите категорию в которой хотите получить скидку ⬇",reply_markup=main_keyboard_gen())
@@ -163,8 +155,7 @@ def query_handler(call):
             user_channel_status = bot.get_chat_member(chat_id=config.TELEGRAM_CHANNEL_USERNAME, user_id=call.message.chat.id)
             
             keyb_local = back_keyboard_gen(data)
-            
-            print(user_channel_status.status)
+
             if user_channel_status.status == "left":
                 keyb_local.add(InlineKeyboardButton("Подпишитесь на канал!",url = config.TELEGRAM_CHANNEL_INVITE_URL))
             
