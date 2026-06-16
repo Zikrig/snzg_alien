@@ -1,0 +1,215 @@
+import telebot
+
+from telebot import types
+from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
+from telebot.types import ReplyKeyboardMarkup, KeyboardButton
+from telebot.types import InputMediaPhoto
+import config
+import data_file
+import st
+
+bot = telebot.TeleBot(config.TELEGRAM_BOT_TOKEN)
+import string
+import itertools
+LETER_ASCII = list(itertools.product(string.ascii_uppercase, repeat=1)) + list(itertools.product(string.ascii_uppercase, repeat=2))
+LETER_ASCII = ["".join(x) for x in LETER_ASCII]
+user_import_dict = {}
+
+main_keyb_cat_market = ReplyKeyboardMarkup(resize_keyboard=True)
+main_keyb_cat_market.add(KeyboardButton("Категории"),KeyboardButton("Магазины"))
+
+
+def main_keyboard_gen():
+    main_keyboard = InlineKeyboardMarkup()
+    temp = data_file.main_dict.keys()
+    main_keyboard.add(InlineKeyboardButton("Список магазинов",callback_data="*"))
+    for x in temp:
+        main_keyboard.add(InlineKeyboardButton(x, callback_data="1" + x))
+    main_keyboard.add(InlineKeyboardButton("Таблица со всеми Промокодами!",url=config.GOOGLE_SHEETS_URL))
+    return main_keyboard
+    
+def secondary_keyboard_gen(cat):
+    secondary_keyboard = InlineKeyboardMarkup()
+    temp = data_file.main_dict[cat]
+    for x in temp:
+        secondary_keyboard.add(InlineKeyboardButton(x,callback_data="2"+str(x)))
+    secondary_keyboard.add(InlineKeyboardButton("В меню",callback_data = "bm"))
+    return secondary_keyboard
+
+def semi_secondary_keyboard_gen(market):
+    semi_secondary_keyboard = InlineKeyboardMarkup()
+    temp = data_file.semi_dict[market]
+    for el,ind in temp:
+        semi_secondary_keyboard.add(InlineKeyboardButton(el,callback_data="3"+str(ind)))
+    semi_secondary_keyboard.add(InlineKeyboardButton("В меню",callback_data = "bm"))
+    return semi_secondary_keyboard
+
+
+def back_keyboard_gen(market):
+    back_keyboard = InlineKeyboardMarkup()
+    
+    back_keyboard.add(InlineKeyboardButton("В меню",callback_data = "bm"))
+    for k,v in data_file.main_dict.items():
+        if market in v:
+            back_keyboard.add(InlineKeyboardButton(k, callback_data="1"+k))
+    return back_keyboard
+
+all_markets_keyb = InlineKeyboardMarkup()
+tem = list(sorted(data_file.semi_dict.keys()))
+print(tem)
+for i in range(0,len(tem),3):
+    tempr = tem[i:i + 3]
+    print(tempr)
+    l = []
+    for j in tempr:
+        l.append(InlineKeyboardButton(j,callback_data = "2"+j))
+    all_markets_keyb.add(*l)
+all_markets_keyb.add(InlineKeyboardButton("В меню",callback_data = "bm"))
+
+to_menu_keyb = InlineKeyboardMarkup()
+to_menu_keyb.row(InlineKeyboardButton("В меню",callback_data = "bm"))
+
+@bot.message_handler(content_types=['text'])
+def start(message):
+    
+    global user_import_dict
+
+
+    print(user_import_dict)
+
+
+    
+    if message.text == '/start':
+        bot.send_message(message.chat.id,"Рады вас видеть в SkidkiNezagorami", reply_markup=main_keyb_cat_market)
+        bot.send_message(message.chat.id, "Выберите категорию в которой хотите получить скидку ⬇",reply_markup=main_keyboard_gen())
+    elif message.text == config.admin_command("refresh_GS"):
+        data_file.regenerate()
+        bot.send_message(message.chat.id, "обновление таблицы прошло упешно")
+    elif message.text == config.admin_command("stat_output"):
+        fn = st.output_stat_frame()
+        with open(fn, "r", encoding="utf-8") as f:
+            bot.send_document(message.chat.id,document=f)
+    elif message.text == config.admin_command("stat_refresh"):
+        st.refresh_stat()
+        bot.send_message(message.chat.id, "очистка статистика прошла упешно")
+    elif message.text == "Категории":
+        bot.send_message(message.chat.id, "Выберите категорию в которой хотите получить скидку ⬇",reply_markup=main_keyboard_gen())
+        
+    elif message.text == "Магазины":
+        bot.send_message(message.chat.id,"Выбирайте 🥰" ,reply_markup = all_markets_keyb)
+    elif message.text in data_file.semi_dict:
+        bot.send_message(message.chat.id,"Выбирайте 🥰",reply_markup=semi_secondary_keyboard_gen(message.text))
+        
+    else:
+        
+        try:
+            
+            if user_import_dict[message.chat.id][2] in message.text:
+                data = user_import_dict[message.chat.id][0]
+                try:
+                    
+                    data_file.got_promos[str(message.chat.id)].append(int(data.replace("u",'')))
+                    promo_ind, un_promo = data_file.unicum_sheet[data][0]
+                    data_file.unicum_sheet[data] = data_file.unicum_sheet[data][1:]
+                    cell_indx_a = LETER_ASCII[int(data.replace("u",""))] + str(promo_ind+7)
+                    
+                    data_file.cell_done(cell_indx_a,message.chat.id)
+                    bot.send_message(message.chat.id, f"<code>{un_promo}</code>",parse_mode="HTML")
+                    
+                except:
+                    
+                    data_file.got_promos[str(message.chat.id)] = [int(data.replace("u",''))]
+                    promo_ind, un_promo = data_file.unicum_sheet[data][0]
+                    data_file.unicum_sheet[data] = data_file.unicum_sheet[data][1:]
+                    cell_indx_a = LETER_ASCII[int(data.replace("u",""))] + str(promo_ind+7)
+                    
+                    data_file.cell_done(cell_indx_a,message.chat.id)
+                    bot.send_message(message.chat.id, f"<code>{un_promo}</code>",parse_mode="HTML")
+                keyb_local = back_keyboard_gen(data)
+                user_import_dict.pop(message.chat.id)
+                bot.send_message(message.chat.id, "Куда отправимся за скидками дальше?" ,
+                             reply_markup=to_menu_keyb)
+            else:
+                    bot.send_message(message.chat.id, "что-то пошло не так, поробуйте снова")
+        except:
+            pass
+
+@bot.callback_query_handler(func=lambda call: True)
+def query_handler(call):
+    global user_import_dict
+    bot.answer_callback_query(callback_query_id=call.id, )
+    data = call.data[1:]
+    flag = call.data[0]
+    if flag == "*":
+        bot.edit_message_text(message_id=call.message.message_id,chat_id=call.message.chat.id,text = "Выбирайте 🥰" ,reply_markup = all_markets_keyb)
+    
+    if flag == "1":
+        st.join_new_stat_data("tg",call.from_user.id,data)
+        bot.edit_message_text(message_id=call.message.message_id,chat_id=call.message.chat.id, text="Выбирайте 🥰",  reply_markup=secondary_keyboard_gen(data) )
+    
+    if flag == "2":
+        bot.edit_message_text(message_id=call.message.message_id,chat_id=call.message.chat.id, text="Выбирайте 🥰", reply_markup=semi_secondary_keyboard_gen(data) )
+        
+    if flag == '3':
+        
+
+        
+        #u in data
+        if 'u' not in data:
+            bot.send_message(call.message.chat.id,"Чтобы воспользоваться акцией необходимо: перейти по ссылке или скопировать промокод и ввести его на сайте или приложении магазина")
+            bot.send_message(call.message.chat.id, data_file.text_dict[data],parse_mode="HTML")
+            st.join_new_stat_data("tg", call.from_user.id, data_file.main_list[int(data)][0])
+            
+            user_channel_status = bot.get_chat_member(chat_id=config.TELEGRAM_CHANNEL_USERNAME, user_id=call.message.chat.id)
+            
+            keyb_local = back_keyboard_gen(data)
+            
+            print(user_channel_status.status)
+            if user_channel_status.status == "left":
+                keyb_local.add(InlineKeyboardButton("Подпишитесь на канал!",url = config.TELEGRAM_CHANNEL_INVITE_URL))
+            
+            bot.send_message(call.message.chat.id, "Куда отправимся за скидками дальше?" ,
+                             reply_markup=keyb_local)
+        else:
+            try:
+                if int(data.replace("u",'')) not in data_file.got_promos[str(call.message.chat.id)]:
+                    
+                    bot.send_message(call.message.chat.id,data_file.text_dict[data] +"\n" +  data_file.link_try_dict[data][1])
+                    user_import_dict[call.message.chat.id] = data_file.link_try_dict[data]
+                    
+                    """
+                    promo_ind, un_promo = data_file.unicum_sheet[data][0]
+                    data_file.unicum_sheet[data] = data_file.unicum_sheet[data][1:]
+                    cell_indx_a = LETER_ASCII[int(data.replace("u",""))] + str(promo_ind+7)
+                    
+                    data_file.cell_done(cell_indx_a,call.message.chat.id)
+                    bot.send_message(call.message.chat.id, data_file.text_dict[data].format(un_promo),parse_mode=telegram.ParseMode.HTML)
+                    data_file.got_promos[str(call.message.chat.id)].append(int(data.replace("u",'')))
+                    """
+                else:
+                    bot.send_message(call.message.chat.id, "Вы уже использовали промокод")
+            except:
+                    bot.send_message(call.message.chat.id,data_file.text_dict[data] +"\n" + data_file.link_try_dict[data][1])
+                    user_import_dict[call.message.chat.id] = data_file.link_try_dict[data]
+                    """
+                    promo_ind, un_promo = data_file.unicum_sheet[data][0]
+                    data_file.unicum_sheet[data] = data_file.unicum_sheet[data][1:]
+                    cell_indx_a = LETER_ASCII[int(data.replace("u",""))] + str(promo_ind+7)
+                    
+                    data_file.cell_done(cell_indx_a,call.message.chat.id)
+                    bot.send_message(call.message.chat.id, data_file.text_dict[data].format(un_promo),parse_mode=telegram.ParseMode.HTML)
+                    data_file.got_promos[str(call.message.chat.id)] = [int(data.replace("u",''))]
+                    """
+        
+    if flag == "b":
+        if data == "m":
+            bot.edit_message_text(message_id=call.message.message_id,chat_id=call.message.chat.id,
+                                  text="Выберите категорию в которой хотите получить скидку ⬇",
+                                  reply_markup=main_keyboard_gen())
+
+
+
+
+print("Ready")
+bot.infinity_polling()
+

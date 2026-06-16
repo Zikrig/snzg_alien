@@ -1,0 +1,36 @@
+# Environment
+.env
+.env.local
+
+# Google Service Account credentials
+credentials/*.json
+calm-vine-*.json
+
+# Generated stat reports
+*.txt
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Archives
+*.zip
+
+# VK session config (if created at runtime)
+vk_config.v2.json
