@@ -97,7 +97,19 @@ def start(message):
         if not pending:
             return
 
+        logger.info(
+            "promo_verify: user=%s pending=%s text=%r",
+            message.chat.id,
+            pending[0],
+            message.text[:80] if message.text else None,
+        )
+
         if pending[2] not in message.text:
+            logger.warning(
+                "promo_verify: user=%s — phrase mismatch, expected substring=%r",
+                message.chat.id,
+                pending[2],
+            )
             bot.send_message(message.chat.id, "что-то пошло не так, поробуйте снова")
             return
 
@@ -167,6 +179,7 @@ def query_handler(call):
             elif not data_file.unicum_sheet.get(data):
                 bot.send_message(call.message.chat.id, "Промокоды закончились")
             else:
+                logger.info("promo_start: user=%s promo=%s — sending instructions", call.message.chat.id, data)
                 bot.send_message(
                     call.message.chat.id,
                     data_file.text_dict[data] + "\n" + data_file.link_try_dict[data][1],
@@ -182,6 +195,14 @@ def query_handler(call):
 
 
 
-print("Ready")
-bot.infinity_polling()
+def start_polling():
+    webhook = bot.get_webhook_info()
+    if webhook.url:
+        logger.warning("Active webhook %s — removing before polling", webhook.url)
+    bot.delete_webhook()
+    logger.info("Telegram bot started in polling mode")
+    bot.infinity_polling()
+
+
+start_polling()
 

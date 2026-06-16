@@ -3,12 +3,15 @@ import logging
 import string
 import threading
 import time
+from pathlib import Path
 
 import gspread
 
 import config
 
 logger = logging.getLogger(__name__)
+
+LOG_DIR = Path(__file__).resolve().parent / "logs"
 
 main_dict = {}
 text_dict = {}
@@ -37,14 +40,16 @@ def cell_done(cell, user_id):
     for attempt in range(3):
         try:
             worksheet2.update([[value]], range_name=cell)
+            logger.info("cell_done OK: cell=%s user_id=%s value=%s", cell, user_id, value)
             return
         except Exception as exc:
             last_error = exc
             logger.exception(
-                "cell_done failed for cell=%s user_id=%s (attempt %d)",
+                "cell_done FAILED: cell=%s user_id=%s (attempt %d/%d)",
                 cell,
                 user_id,
                 attempt + 1,
+                3,
             )
             time.sleep(attempt + 1)
     raise last_error
@@ -65,23 +70,39 @@ def issue_unicum_promo(user_id, promo_key):
 
     with promo_lock:
         if col_ind in got_promos.get(user_id_str, set()):
+            logger.info("issue_unicum_promo: user=%s promo=%s — already_used", user_id, promo_key)
             raise ValueError("already_used")
 
         queue = unicum_sheet.get(promo_key, [])
         if not queue:
+            logger.warning("issue_unicum_promo: user=%s promo=%s — no_codes_left", user_id, promo_key)
             raise ValueError("no_codes_left")
 
         promo_ind, promo_code = queue[0]
         unicum_sheet[promo_key] = queue[1:]
         cell = COLUMN_LETTERS[col_ind] + str(promo_ind + 7)
+        logger.info(
+            "issue_unicum_promo: user=%s promo=%s cell=%s code=%s — writing to sheet",
+            user_id,
+            promo_key,
+            cell,
+            promo_code,
+        )
 
         try:
             cell_done(cell, user_id)
         except Exception:
             unicum_sheet[promo_key] = queue
+            logger.error(
+                "issue_unicum_promo: user=%s promo=%s cell=%s — sheet write failed, rolled back",
+                user_id,
+                promo_key,
+                cell,
+            )
             raise
 
         got_promos.setdefault(user_id_str, set()).add(col_ind)
+        logger.info("issue_unicum_promo: user=%s promo=%s — done", user_id, promo_key)
         return promo_code
 
 
