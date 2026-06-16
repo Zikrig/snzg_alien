@@ -6,7 +6,7 @@
 __pycache__
 *.py[cod]
 # stat reports (1678979915.txt), not requirements.txt
-[0-9]*.txt
+
 *.zip
 credentials/*.json
 calm-vine-*.json
