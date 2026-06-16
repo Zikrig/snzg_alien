@@ -16,9 +16,14 @@ GOOGLE_SHEETS_URL = os.getenv(
     "GOOGLE_SHEETS_URL",
     "https://docs.google.com/spreadsheets/d/1FhYGE5IODqbtXSfQGBs0BGUaUJYAWBGAC2SRWqYzf6M",
 )
-GOOGLE_SERVICE_ACCOUNT_FILE = os.getenv(
+_google_creds = os.getenv(
     "GOOGLE_SERVICE_ACCOUNT_FILE",
-    str(BASE_DIR / "credentials" / "google-service-account.json"),
+    "credentials/google-service-account.json",
+)
+GOOGLE_SERVICE_ACCOUNT_FILE = (
+    _google_creds
+    if os.path.isabs(_google_creds)
+    else str(BASE_DIR / _google_creds)
 )
 
 ADMIN_SECRET = os.environ["ADMIN_SECRET"]
