@@ -1,6 +1,7 @@
 import logging
 
 import telebot
+from telebot.apihelper import ApiTelegramException
 
 from telebot import types
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
@@ -66,6 +67,25 @@ all_markets_keyb.add(InlineKeyboardButton("В меню",callback_data = "bm"))
 
 to_menu_keyb = InlineKeyboardMarkup()
 to_menu_keyb.row(InlineKeyboardButton("В меню",callback_data = "bm"))
+
+
+def user_left_channel(user_id):
+    """Return True if user is not subscribed. False if subscribed or check unavailable."""
+    try:
+        member = bot.get_chat_member(
+            chat_id=config.TELEGRAM_CHANNEL_USERNAME,
+            user_id=user_id,
+        )
+        return member.status in ("left", "kicked")
+    except ApiTelegramException as exc:
+        logger.warning(
+            "Channel subscription check failed for user=%s channel=%s: %s",
+            user_id,
+            config.TELEGRAM_CHANNEL_USERNAME,
+            exc,
+        )
+        return False
+
 
 @bot.message_handler(content_types=['text'])
 def start(message):
@@ -164,11 +184,9 @@ def query_handler(call):
             bot.send_message(call.message.chat.id, data_file.text_dict[data],parse_mode="HTML")
             st.join_new_stat_data("tg", call.from_user.id, data_file.main_list[int(data)][0])
             
-            user_channel_status = bot.get_chat_member(chat_id=config.TELEGRAM_CHANNEL_USERNAME, user_id=call.message.chat.id)
-            
             keyb_local = back_keyboard_gen(data)
 
-            if user_channel_status.status == "left":
+            if user_left_channel(call.from_user.id):
                 keyb_local.add(InlineKeyboardButton("Подпишитесь на канал!",url = config.TELEGRAM_CHANNEL_INVITE_URL))
             
             bot.send_message(call.message.chat.id, "Куда отправимся за скидками дальше?" ,
