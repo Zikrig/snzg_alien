@@ -1,3 +1,5 @@
+import logging
+
 import telebot
 
 from telebot import types
@@ -8,11 +10,9 @@ import config
 import data_file
 import st
 
+logger = logging.getLogger(__name__)
+
 bot = telebot.TeleBot(config.TELEGRAM_BOT_TOKEN)
-import string
-import itertools
-LETER_ASCII = list(itertools.product(string.ascii_uppercase, repeat=1)) + list(itertools.product(string.ascii_uppercase, repeat=2))
-LETER_ASCII = ["".join(x) for x in LETER_ASCII]
 user_import_dict = {}
 
 main_keyb_cat_market = ReplyKeyboardMarkup(resize_keyboard=True)
@@ -101,38 +101,38 @@ def start(message):
         bot.send_message(message.chat.id,"Выбирайте 🥰",reply_markup=semi_secondary_keyboard_gen(message.text))
         
     else:
-        
+        pending = user_import_dict.get(message.chat.id)
+        if not pending:
+            return
+
+        if pending[2] not in message.text:
+            bot.send_message(message.chat.id, "что-то пошло не так, поробуйте снова")
+            return
+
+        promo_key = pending[0]
         try:
-            
-            if user_import_dict[message.chat.id][2] in message.text:
-                data = user_import_dict[message.chat.id][0]
-                try:
-                    
-                    data_file.got_promos[str(message.chat.id)].append(int(data.replace("u",'')))
-                    promo_ind, un_promo = data_file.unicum_sheet[data][0]
-                    data_file.unicum_sheet[data] = data_file.unicum_sheet[data][1:]
-                    cell_indx_a = LETER_ASCII[int(data.replace("u",""))] + str(promo_ind+7)
-                    
-                    data_file.cell_done(cell_indx_a,message.chat.id)
-                    bot.send_message(message.chat.id, f"<code>{un_promo}</code>",parse_mode="HTML")
-                    
-                except:
-                    
-                    data_file.got_promos[str(message.chat.id)] = [int(data.replace("u",''))]
-                    promo_ind, un_promo = data_file.unicum_sheet[data][0]
-                    data_file.unicum_sheet[data] = data_file.unicum_sheet[data][1:]
-                    cell_indx_a = LETER_ASCII[int(data.replace("u",""))] + str(promo_ind+7)
-                    
-                    data_file.cell_done(cell_indx_a,message.chat.id)
-                    bot.send_message(message.chat.id, f"<code>{un_promo}</code>",parse_mode="HTML")
-                keyb_local = back_keyboard_gen(data)
-                user_import_dict.pop(message.chat.id)
-                bot.send_message(message.chat.id, "Куда отправимся за скидками дальше?" ,
-                             reply_markup=to_menu_keyb)
+            promo_code = data_file.issue_unicum_promo(message.chat.id, promo_key)
+        except ValueError as exc:
+            if str(exc) == "already_used":
+                bot.send_message(message.chat.id, "Вы уже использовали промокод")
+            elif str(exc) == "no_codes_left":
+                bot.send_message(message.chat.id, "Промокоды закончились")
             else:
-                    bot.send_message(message.chat.id, "что-то пошло не так, поробуйте снова")
-        except:
-            pass
+                bot.send_message(message.chat.id, "что-то пошло не так, поробуйте снова")
+            user_import_dict.pop(message.chat.id, None)
+            return
+        except Exception:
+            logger.exception("Failed to issue promo for user %s", message.chat.id)
+            bot.send_message(message.chat.id, "Не удалось выдать промокод, попробуйте позже")
+            return
+
+        user_import_dict.pop(message.chat.id, None)
+        bot.send_message(message.chat.id, f"<code>{promo_code}</code>", parse_mode="HTML")
+        bot.send_message(
+            message.chat.id,
+            "Куда отправимся за скидками дальше?",
+            reply_markup=to_menu_keyb,
+        )
 
 @bot.callback_query_handler(func=lambda call: True)
 def query_handler(call):
@@ -171,35 +171,16 @@ def query_handler(call):
             bot.send_message(call.message.chat.id, "Куда отправимся за скидками дальше?" ,
                              reply_markup=keyb_local)
         else:
-            try:
-                if int(data.replace("u",'')) not in data_file.got_promos[str(call.message.chat.id)]:
-                    
-                    bot.send_message(call.message.chat.id,data_file.text_dict[data] +"\n" +  data_file.link_try_dict[data][1])
-                    user_import_dict[call.message.chat.id] = data_file.link_try_dict[data]
-                    
-                    """
-                    promo_ind, un_promo = data_file.unicum_sheet[data][0]
-                    data_file.unicum_sheet[data] = data_file.unicum_sheet[data][1:]
-                    cell_indx_a = LETER_ASCII[int(data.replace("u",""))] + str(promo_ind+7)
-                    
-                    data_file.cell_done(cell_indx_a,call.message.chat.id)
-                    bot.send_message(call.message.chat.id, data_file.text_dict[data].format(un_promo),parse_mode=telegram.ParseMode.HTML)
-                    data_file.got_promos[str(call.message.chat.id)].append(int(data.replace("u",'')))
-                    """
-                else:
-                    bot.send_message(call.message.chat.id, "Вы уже использовали промокод")
-            except:
-                    bot.send_message(call.message.chat.id,data_file.text_dict[data] +"\n" + data_file.link_try_dict[data][1])
-                    user_import_dict[call.message.chat.id] = data_file.link_try_dict[data]
-                    """
-                    promo_ind, un_promo = data_file.unicum_sheet[data][0]
-                    data_file.unicum_sheet[data] = data_file.unicum_sheet[data][1:]
-                    cell_indx_a = LETER_ASCII[int(data.replace("u",""))] + str(promo_ind+7)
-                    
-                    data_file.cell_done(cell_indx_a,call.message.chat.id)
-                    bot.send_message(call.message.chat.id, data_file.text_dict[data].format(un_promo),parse_mode=telegram.ParseMode.HTML)
-                    data_file.got_promos[str(call.message.chat.id)] = [int(data.replace("u",''))]
-                    """
+            if data_file.user_has_got_promo(call.message.chat.id, data):
+                bot.send_message(call.message.chat.id, "Вы уже использовали промокод")
+            elif not data_file.unicum_sheet.get(data):
+                bot.send_message(call.message.chat.id, "Промокоды закончились")
+            else:
+                bot.send_message(
+                    call.message.chat.id,
+                    data_file.text_dict[data] + "\n" + data_file.link_try_dict[data][1],
+                )
+                user_import_dict[call.message.chat.id] = data_file.link_try_dict[data]
         
     if flag == "b":
         if data == "m":

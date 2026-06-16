@@ -1,5 +1,5 @@
 python-dotenv
 pytelegrambotapi
-gspread
+gspread>=6.0,<7
 google-auth
 requests
