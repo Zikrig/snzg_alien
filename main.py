@@ -55,15 +55,19 @@ def acquire_lock_or_exit():
         except (OSError, ValueError):
             logger.warning("Removing invalid lock file %s", LOCK_FILE)
             LOCK_FILE.unlink(missing_ok=True)
-        elif _pid_is_running(old_pid):
-            logger.error(
-                "Lock file %s is held by running process %s. Exiting.",
+        else:
+            if _pid_is_running(old_pid):
+                logger.error(
+                    "Lock file %s is held by running process %s. Exiting.",
+                    LOCK_FILE,
+                    old_pid,
+                )
+                sys.exit(1)
+            logger.warning(
+                "Removing stale lock file %s (pid %s is not running)",
                 LOCK_FILE,
                 old_pid,
             )
-            sys.exit(1)
-        else:
-            logger.warning("Removing stale lock file %s (pid %s is not running)", LOCK_FILE, old_pid)
             LOCK_FILE.unlink(missing_ok=True)
 
     try:
