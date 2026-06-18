@@ -1,4 +1,5 @@
 import logging
+import time
 
 import telebot
 from telebot.apihelper import ApiTelegramException
@@ -15,6 +16,36 @@ logger = logging.getLogger(__name__)
 
 bot = telebot.TeleBot(config.TELEGRAM_BOT_TOKEN)
 user_import_dict = {}
+
+
+def _is_polling_conflict(exc):
+    if not isinstance(exc, ApiTelegramException):
+        return False
+    desc = getattr(exc, "description", "") or str(exc)
+    error_code = getattr(exc, "error_code", None)
+    return error_code == 409 or "terminated by other getUpdates request" in desc
+
+
+class PollingConflictHandler(telebot.ExceptionHandler):
+    """Stop polling on 409 without spamming TeleBot error logs."""
+
+    def __init__(self, telebot_instance):
+        self._bot = telebot_instance
+        self.conflict_detected = False
+
+    def handle(self, exception):
+        if _is_polling_conflict(exception):
+            if not self.conflict_detected:
+                logger.error(
+                    "Another process is polling the same Telegram bot token; stopping Telegram bot."
+                )
+                self.conflict_detected = True
+            self._bot.stop_polling()
+            return True
+        return False
+
+
+bot.exception_handler = PollingConflictHandler(bot)
 
 main_keyb_cat_market = ReplyKeyboardMarkup(resize_keyboard=True)
 main_keyb_cat_market.add(KeyboardButton("Категории"),KeyboardButton("Магазины"))
@@ -117,25 +148,27 @@ def start(message):
         if not pending:
             return
 
+        promo_key = pending[0]
+        meta = data_file.get_unicum_meta(promo_key)
+
         logger.info(
             "promo_verify: user=%s promo=%s shop=%r label=%r text=%r",
             message.chat.id,
             promo_key,
-            data_file.get_unicum_meta(promo_key).get("shop"),
-            data_file.get_unicum_meta(promo_key).get("label"),
+            meta.get("shop"),
+            meta.get("label"),
             message.text[:80] if message.text else None,
         )
 
         if pending[2] not in message.text:
             logger.warning(
-                "promo_verify: user=%s — phrase mismatch, expected substring=%r",
+                "promo_verify: user=%s promo=%s — phrase mismatch, expected substring=%r",
                 message.chat.id,
+                promo_key,
                 pending[2],
             )
             bot.send_message(message.chat.id, "что-то пошло не так, поробуйте снова")
             return
-
-        promo_key = pending[0]
         try:
             promo_code = data_file.issue_unicum_promo(message.chat.id, promo_key)
         except ValueError as exc:
@@ -182,6 +215,16 @@ def query_handler(call):
         
         #u in data
         if 'u' not in data:
+            row = data_file.main_list[int(data)]
+            logger.info(
+                "promo_regular: user=%s callback=%r promo_id=%s name=%r discount=%r code=%r",
+                call.from_user.id,
+                call.data,
+                data,
+                row[0],
+                row[3],
+                row[2],
+            )
             bot.send_message(call.message.chat.id,"Чтобы воспользоваться акцией необходимо: перейти по ссылке или скопировать промокод и ввести его на сайте или приложении магазина")
             bot.send_message(call.message.chat.id, data_file.text_dict[data],parse_mode="HTML")
             st.join_new_stat_data("tg", call.from_user.id, data_file.main_list[int(data)][0])
@@ -216,9 +259,10 @@ def query_handler(call):
                 bot.send_message(call.message.chat.id, "Промокоды закончились")
             else:
                 logger.info(
-                    "promo_request: user=%s promo=%s shop=%r label=%r category=%r "
+                    "promo_request: user=%s callback=%r promo=%s shop=%r label=%r category=%r "
                     "codes_available=%d — sending instructions",
                     call.message.chat.id,
+                    call.data,
                     data,
                     meta.get("shop"),
                     meta.get("label"),
@@ -246,7 +290,18 @@ def start_polling():
         logger.warning("Active webhook %s — removing before polling", webhook.url)
     bot.delete_webhook()
     logger.info("Telegram bot started in polling mode")
-    bot.infinity_polling()
+
+    handler = bot.exception_handler
+    while not handler.conflict_detected:
+        bot.polling(
+            non_stop=False,
+            logger_level=logging.CRITICAL,
+            interval=1,
+        )
+        if handler.conflict_detected:
+            return
+        logger.warning("Telegram polling stopped unexpectedly, retrying in 10s")
+        time.sleep(10)
 
 
 start_polling()
