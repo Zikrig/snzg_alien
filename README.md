@@ -33,7 +33,7 @@ pip install -r requirements.txt
 python main.py
 ```
 
-Бот запускает два потока: Telegram (`tg.py`) и VK (`vk.py`).
+Бот запускает два потока: Telegram (`tg/`, aiogram 3) и VK (`vk.py`).
 
 ## Docker
 
@@ -87,7 +87,11 @@ docker compose down
 ```
 .
 ├── main.py              # Точка входа (Telegram + VK)
-├── tg.py                # Telegram-бот
+├── tg/                  # Telegram-бот (aiogram 3)
+│   ├── bot.py           # Bot, Dispatcher, polling
+│   ├── keyboards.py     # Клавиатуры
+│   ├── states.py        # FSM для разовых промо
+│   └── handlers/        # Обработчики сообщений и callback
 ├── vk.py                # VK-бот
 ├── data_file.py         # Данные промокодов для Telegram
 ├── vk_data_file.py      # Данные промокодов для VK

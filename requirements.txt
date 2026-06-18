@@ -1,5 +1,5 @@
 python-dotenv
-pytelegrambotapi
+aiogram>=3.13,<4
 gspread>=6.0,<7
 google-auth
 requests

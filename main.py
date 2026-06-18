@@ -90,7 +90,9 @@ def f1():
 
 
 def f2():
-    import tg
+    from tg.bot import start_polling
+
+    start_polling()
 
 
 def main():
