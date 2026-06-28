@@ -56,19 +56,29 @@ def acquire_lock_or_exit():
             logger.warning("Removing invalid lock file %s", LOCK_FILE)
             LOCK_FILE.unlink(missing_ok=True)
         else:
-            if _pid_is_running(old_pid):
+            # В Docker главный процесс всегда PID 1: после crash/restart lock с «1»
+            # остаётся на диске, а новый процесс снова pid=1 — os.kill(1,0) «успешен».
+            if old_pid == os.getpid():
+                logger.warning(
+                    "Removing stale lock file %s (pid %s matches current process, likely container restart)",
+                    LOCK_FILE,
+                    old_pid,
+                )
+                LOCK_FILE.unlink(missing_ok=True)
+            elif _pid_is_running(old_pid):
                 logger.error(
                     "Lock file %s is held by running process %s. Exiting.",
                     LOCK_FILE,
                     old_pid,
                 )
                 sys.exit(1)
-            logger.warning(
-                "Removing stale lock file %s (pid %s is not running)",
-                LOCK_FILE,
-                old_pid,
-            )
-            LOCK_FILE.unlink(missing_ok=True)
+            else:
+                logger.warning(
+                    "Removing stale lock file %s (pid %s is not running)",
+                    LOCK_FILE,
+                    old_pid,
+                )
+                LOCK_FILE.unlink(missing_ok=True)
 
     try:
         fd = os.open(str(LOCK_FILE), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
